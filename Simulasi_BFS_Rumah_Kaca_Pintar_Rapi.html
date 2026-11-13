@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visualisasi BFS - Sistem Alarm Rumah Kaca Pintar</title>
+<style>
+:root {
+  --bg:#0b1220; --panel:#121e30; --panel2:#192a40; --line:#30445e;
+  --text:#eef5ff; --muted:#a9bad0; --cyan:#5eead4;
+  --yellow:#fbbf24; --green:#4ade80;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; color:var(--text);
+  background:radial-gradient(circle at 10% 0,#1c3853,transparent 35%),var(--bg);
+  font:15px/1.55 system-ui,sans-serif;
+}
+header { padding:26px 5vw 18px; border-bottom:1px solid var(--line); }
+.eyebrow { color:var(--cyan); font-size:.78rem; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
+h1 { font-size:clamp(1.6rem,4vw,2.5rem); line-height:1.15; margin:7px 0; }
+header p,.sub,.muted { color:var(--muted); }
+main {
+  max-width:1200px; margin:auto; padding:22px 18px 42px;
+  display:grid; grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr); gap:16px;
+}
+.panel {
+  min-width:0; background:linear-gradient(145deg,var(--panel),#101a29);
+  border:1px solid var(--line); border-radius:17px; padding:17px;
+  box-shadow:0 12px 30px #0003;
+}
+.panel h2 { font-size:1.05rem; margin:0; }
+.sub { font-size:.87rem; margin:4px 0 13px; }
+.graph {
+  background:#0a1626; border:1px solid #293e57; border-radius:13px;
+  overflow:hidden;
+}
+svg { width:100%; height:auto; display:block; }
+.edge { stroke:#526982; stroke-width:3; stroke-linecap:round; }
+.edge.path { stroke:var(--green); stroke-width:6; }
+.node circle { fill:#1a2b43; stroke:#8197b2; stroke-width:2.5; transition:fill .2s,stroke .2s; }
+.node text { fill:white; text-anchor:middle; font-size:13px; font-weight:800; pointer-events:none; }
+.node .small { font-size:10px; fill:#c4d2e3; font-weight:500; }
+.node.visited circle { fill:#164b4b; stroke:var(--cyan); }
+.node.current circle { fill:#694b13; stroke:var(--yellow); stroke-width:4; }
+.node.pathnode circle { fill:#14532d; stroke:var(--green); stroke-width:4; }
+.legend { display:flex; gap:12px; flex-wrap:wrap; color:var(--muted); font-size:.78rem; margin:11px 0; }
+.dot { display:inline-block; width:10px; height:10px; border-radius:50%; border:2px solid #8197b2; margin-right:4px; }
+.d1 { background:#164b4b; border-color:var(--cyan); }
+.d2 { background:#694b13; border-color:var(--yellow); }
+.d3 { background:#14532d; border-color:var(--green); }
+.controls { display:flex; gap:8px; flex-wrap:wrap; }
+button {
+  background:#1b2d45; color:white; border:1px solid #526982;
+  border-radius:9px; padding:10px 13px; font-weight:700; cursor:pointer;
+}
+button.primary { background:#0f766e; border-color:#2dd4bf; }
+button:disabled { opacity:.4; cursor:not-allowed; }
+.right { display:grid; gap:16px; align-content:start; }
+.stats { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.stat { background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px; min-width:0; }
+.stat small { display:block; color:var(--muted); }
+.stat strong { font-size:1.1rem; overflow-wrap:anywhere; }
+.queue { display:flex; gap:6px; flex-wrap:wrap; min-height:35px; }
+.chip { padding:5px 10px; border-radius:8px; background:#263c58; border:1px solid #647c98; font-weight:800; }
+.chip:first-child { color:#fde68a; border-color:var(--yellow); }
+.log { max-height:190px; overflow:auto; padding-left:22px; }
+.log li { padding:2px 0; }
+.result { background:#102b25; border:1px solid #28745a; border-radius:11px; padding:12px; overflow-wrap:anywhere; }
+.result b { color:var(--green); }
+.explain { grid-column:1/-1; }
+.cards { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.cards article { background:var(--panel2); border:1px solid var(--line); padding:12px; border-radius:11px; }
+.cards b { color:var(--cyan); }
+footer { text-align:center; color:#8195ad; font-size:.8rem; padding:0 15px 24px; }
+@media(max-width:820px) {
+  main { grid-template-columns:1fr; }
+  .explain { grid-column:auto; }
+  .cards { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Visualisasi algoritma pencarian</div>
+  <h1>BFS pada Sistem Alarm Rumah Kaca Pintar</h1>
+  <p>Amati bagaimana <b>Breadth-First Search (BFS)</b> menelusuri jaringan komponen dari sensor kelembapan menuju buzzer alarm. Jalankan animasi untuk melihat antrean FIFO dan jalur yang ditemukan.</p>
+</header>
+
+<main>
+<section class="panel">
+  <h2>Graf jaringan komponen</h2>
+  <p class="sub">Posisi node disusun berdasarkan tingkat BFS. Kuning = sedang diperiksa · hijau = jalur hasil.</p>
+  <div class="graph">
+    <!--
+      Tata letak mengikuti tingkat jarak dari S:
+      Susunan visual menempatkan S di bagian atas, A dan C di tingkat berikutnya,
+      node cabang di sisi kiri/tengah, serta B dan R di bagian bawah.
+      Posisi hanya mengatur keterbacaan; urutan BFS ditentukan oleh queue.
+      Garis digambar di belakang node dan seluruh hubungan dipertahankan.
+    -->
+    <svg viewBox="0 0 780 600" role="img" aria-label="Graf BFS delapan komponen dengan garis penghubung tanpa persilangan">
+      <g id="edges">
+        <line class="edge" data-e="S-A" x1="390" y1="70" x2="220" y2="220"/>
+        <line class="edge" data-e="S-C" x1="390" y1="70" x2="560" y2="220"/>
+        <line class="edge" data-e="A-T" x1="220" y1="220" x2="390" y2="390"/>
+        <line class="edge" data-e="A-D" x1="220" y1="220" x2="70" y2="390"/>
+        <line class="edge" data-e="A-L" x1="220" y1="220" x2="190" y2="390"/>
+        <line class="edge" data-e="C-T" x1="560" y1="220" x2="390" y2="390"/>
+        <line class="edge" data-e="T-B" x1="390" y1="390" x2="300" y2="520"/>
+        <line class="edge" data-e="T-R" x1="390" y1="390" x2="500" y2="520"/>
+      </g>
+
+      <g class="node" id="nS" transform="translate(390 70)">
+        <circle r="43"/><text y="-3">S</text><text class="small" y="15">Sensor</text>
+      </g>
+      <g class="node" id="nA" transform="translate(220 220)">
+        <circle r="43"/><text y="-3">A</text><text class="small" y="15">Arduino</text>
+      </g>
+      <g class="node" id="nC" transform="translate(560 220)">
+        <circle r="43"/><text y="-3">C</text><text class="small" y="15">Komparator</text>
+      </g>
+      <g class="node" id="nD" transform="translate(70 390)">
+        <circle r="43"/><text y="-3">D</text><text class="small" y="15">Display</text>
+      </g>
+      <g class="node" id="nT" transform="translate(390 390)">
+        <circle r="43"/><text y="-3">T</text><text class="small" y="15">Transistor</text>
+      </g>
+      <g class="node" id="nL" transform="translate(190 390)">
+        <circle r="43"/><text y="-3">L</text><text class="small" y="15">LED</text>
+      </g>
+      <g class="node" id="nB" transform="translate(300 520)">
+        <circle r="43"/><text y="-3">B</text><text class="small" y="15">Buzzer</text>
+      </g>
+      <g class="node" id="nR" transform="translate(500 520)">
+        <circle r="43"/><text y="-3">R</text><text class="small" y="15">Relay</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot"></i>Belum dikunjungi</span>
+    <span><i class="dot d1"></i>Sudah diproses</span>
+    <span><i class="dot d2"></i>Sedang diperiksa</span>
+    <span><i class="dot d3"></i>Jalur akhir</span>
+  </div>
+  <div class="controls">
+    <button class="primary" id="start">▶ Mulai</button>
+    <button id="next">Langkah berikutnya</button>
+    <button id="auto">▶ Otomatis</button>
+    <button id="reset">↻ Reset</button>
+  </div>
+</section>
+
+<aside class="right">
+  <section class="panel">
+    <h2>Status pencarian</h2>
+    <p class="sub">Berubah pada setiap langkah BFS.</p>
+    <div class="stats">
+      <div class="stat"><small>Node saat ini</small><strong id="current">—</strong></div>
+      <div class="stat"><small>Langkah</small><strong id="step">0</strong></div>
+    </div>
+    <p><b>Antrean (Queue / FIFO)</b></p>
+    <div class="queue" id="queue">Belum dimulai</div>
+    <p class="muted" id="message" aria-live="polite">Tekan Mulai untuk memulai.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Urutan kunjungan</h2>
+    <p class="sub">Urutan node yang dikeluarkan dari antrean untuk diperiksa.</p>
+    <ol class="log" id="visited"><li class="muted">Belum ada.</li></ol>
+  </section>
+
+  <section class="panel">
+    <h2>Hasil jalur</h2>
+    <div class="result" id="result">Jalur belum ditemukan.</div>
+  </section>
+</aside>
+
+<section class="panel explain">
+  <h2>Mengapa BFS?</h2>
+  <p class="sub">BFS memeriksa node berdasarkan tingkat kedekatan, menggunakan antrean FIFO.</p>
+  <div class="cards">
+    <article><b>1. FIFO</b><br><span class="muted">Node yang masuk lebih awal diproses lebih dahulu.</span></article>
+    <article><b>2. Per tingkat</b><br><span class="muted">Node pada tingkat yang lebih dekat diperiksa sebelum tingkat berikutnya.</span></article>
+    <article><b>3. Jalur terpendek</b><br><span class="muted">Pada graf tanpa bobot, BFS menemukan jalur dengan jumlah edge paling sedikit.</span></article>
+  </div>
+  <p class="muted">Catatan: graf ini merupakan model hubungan sederhana untuk pembelajaran, bukan rancangan rangkaian listrik siap pakai.</p>
+</section>
+</main>
+
+<footer>Proyek visualisasi BFS · HTML, CSS, dan JavaScript murni</footer>
+
+<script>
+"use strict";
+
+/*
+ * Graf tidak berarah.
+ * Urutan tetangga dipertahankan karena menentukan urutan enqueue BFS.
+ */
+const graph = {
+  S: ["A", "C"],
+  A: ["S", "T", "D", "L"],
+  C: ["S", "T"],
+  T: ["A", "C", "B", "R"],
+  D: ["A"],
+  L: ["A"],
+  B: ["T"],
+  R: ["T"]
+};
+
+const names = {
+  S: "Sensor kelembapan",
+  A: "Arduino",
+  C: "Modul komparator",
+  T: "Transistor",
+  D: "Display",
+  L: "LED indikator",
+  B: "Buzzer alarm",
+  R: "Relay"
+};
+
+const START_NODE = "S";
+const TARGET_NODE = "B";
+const el = id => document.getElementById(id);
+
+let queue = [];
+let discovered = new Set();
+let parent = {};
+let processed = [];
+let step = 0;
+let done = false;
+let timer = null;
+
+function drawQueue() {
+  el("queue").innerHTML = queue.length
+    ? queue.map(node => `<span class="chip">${node}</span>`).join("")
+    : '<span class="muted">Kosong</span>';
+}
+
+function updateButtons() {
+  el("next").disabled = done || Boolean(timer);
+  el("start").disabled = done || Boolean(timer);
+  el("auto").textContent = timer ? "⏸ Jeda otomatis" : "▶ Otomatis";
+  el("auto").disabled = done;
+}
+
+function renderVisited() {
+  el("visited").innerHTML = processed.length
+    ? processed.map(node => `<li><b>${node}</b> — ${names[node]}</li>`).join("")
+    : '<li class="muted">Belum ada.</li>';
+}
+
+function reset() {
+  if (timer) clearInterval(timer);
+  timer = null;
+
+  queue = [START_NODE];
+  discovered = new Set([START_NODE]);
+  parent = { [START_NODE]: null };
+  processed = [];
+  step = 0;
+  done = false;
+
+  document.querySelectorAll(".node").forEach(node => {
+    node.setAttribute("class", "node");
+  });
+  document.querySelectorAll(".edge").forEach(edge => {
+    edge.classList.remove("path");
+  });
+
+  el("current").textContent = "—";
+  el("step").textContent = "0";
+  el("message").textContent =
+    `BFS siap. Node awal ${START_NODE} masuk ke antrean.`;
+  el("result").textContent = "Jalur belum ditemukan.";
+
+  renderVisited();
+  drawQueue();
+  updateButtons();
+}
+
+function showPath() {
+  const path = [];
+  let node = TARGET_NODE;
+
+  while (node !== null) {
+    path.unshift(node);
+    node = parent[node];
+  }
+
+  path.forEach(id => el("n" + id).classList.add("pathnode"));
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const edge = document.querySelector(
+      `[data-e="${a}-${b}"], [data-e="${b}-${a}"]`
+    );
+    if (edge) edge.classList.add("path");
+  }
+
+  el("result").innerHTML =
+    `<b>Jalur ditemukan!</b><br>${path.join(" → ")}<br>` +
+    `<span class="muted">${path.map(id => names[id]).join(" → ")}<br>` +
+    `Jumlah koneksi: ${path.length - 1} edge</span>`;
+}
+
+function nextStep() {
+  if (done || queue.length === 0) return;
+
+  // FIFO: ambil node yang paling dahulu masuk antrean.
+  const current = queue.shift();
+  step++;
+  processed.push(current);
+
+  document.querySelectorAll(".node").forEach(node => {
+    node.classList.remove("current");
+  });
+
+  el("n" + current).classList.add("visited", "current");
+  el("current").textContent = `${current} — ${names[current]}`;
+  el("step").textContent = step;
+
+  renderVisited();
+
+  // Target diperiksa ketika dikeluarkan dari antrean.
+  if (current === TARGET_NODE) {
+    done = true;
+    showPath();
+    el("message").textContent =
+      "Buzzer ditemukan. Pencarian dihentikan.";
+    drawQueue();
+    updateButtons();
+    stopAutoIfNeeded();
+    return;
+  }
+
+  const added = [];
+
+  // Tandai saat ditemukan/enqueue agar node tidak masuk antrean berulang.
+  for (const neighbor of graph[current]) {
+    if (!discovered.has(neighbor)) {
+      discovered.add(neighbor);
+      parent[neighbor] = current;
+      queue.push(neighbor);
+      added.push(neighbor);
+    }
+  }
+
+  el("message").textContent = added.length
+    ? `Memeriksa ${current}. Node ${added.join(", ")} masuk ke belakang antrean.`
+    : `Memeriksa ${current}. Tidak ada tetangga baru.`;
+
+  drawQueue();
+  updateButtons();
+}
+
+function stopAutoIfNeeded() {
+  if (done && timer) {
+    clearInterval(timer);
+    timer = null;
+    updateButtons();
+  }
+}
+
+el("start").addEventListener("click", nextStep);
+el("next").addEventListener("click", nextStep);
+
+el("auto").addEventListener("click", () => {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+    updateButtons();
+    return;
+  }
+
+  if (done) return;
+
+  timer = setInterval(() => {
+    nextStep();
+    stopAutoIfNeeded();
+  }, 1100);
+
+  updateButtons();
+});
+
+el("reset").addEventListener("click", reset);
+
+reset();
+</script>
+</body>
+</html>
