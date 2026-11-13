@@ -6,9 +6,8 @@ Jelajahi proses BFS, antrean FIFO, dan jalur terpendek menuju buzzer alarm.
 
 ## Preview
 
-🚀 **[Live Demo](https://<USERNAME>.github.io/greenhouse-bfs-visualizer/)**
+🚀 **[Live Demo](https://salmanalfarisi24.github.io/greenhouse-bfs-visualizer/)**
 
-> Ganti `<USERNAME>` dengan username GitHub kamu setelah mengaktifkan GitHub Pages.
 
 ## Run locally
 
